@@ -13,7 +13,7 @@ use App\Http\Controllers\DashboardController;
 
 // 1. Redirect halaman utama ('/') langsung ke daftar menu
 Route::get('/', function () {
-    return redirect()->route('menu.index');
+    return redirect()->route('dashboard');
 });
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
