@@ -14,7 +14,7 @@
         <span class="text-[10px] font-medium text-gray-300 group-hover:text-[#37967D]">Pesanan</span>
     </a>
 
-    <a href="#" class="flex flex-col items-center gap-1 w-1/5 group">
+    <a href="/reports" class="flex flex-col items-center gap-1 w-1/5 group">
         <i class="ph ph-chart-line-up text-2xl text-gray-300 group-hover:text-[#37967D] transition-colors"></i>
         <span class="text-[10px] font-medium text-gray-300 group-hover:text-[#37967D]">Penjualan</span>
     </a>
