@@ -17,18 +17,21 @@
 
 <body class="bg-[#F7F7F7] text-[#333333] font-sans antialiased pb-24">
 
-    {{-- Navbar --}}
-    @includeIf('component.navbar')
+    {{-- ======== NAVBAR (TOP) ======== --}}
+    <header class="w-full max-w-[480px] mx-auto sticky top-0 z-50 bg-white">
+        @includeIf('component.navbar')
+    </header>
 
     <main class="w-full max-w-[480px] mx-auto min-h-screen relative">
         @yield('content')
     </main>
 
+
     {{-- Bottom Nav --}}
-    {{-- Tampilkan Bottom Nav KECUALI di halaman create & edit --}}
-    @if(!request()->routeIs('menu.create') && !request()->routeIs('menu.edit'))
+    {{-- LOGIKA BARU: Tampilkan Navbar KECUALI di halaman 'orders.detail' --}}
+    @unless(request()->routeIs('orders.detail'))
         @includeIf('component.bottom-nav')
-    @endif
+    @endunless
 
     {{-- Scripts --}}
     @vite(['resources/js/menu.js'])

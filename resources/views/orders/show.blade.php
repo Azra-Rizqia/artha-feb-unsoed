@@ -9,7 +9,8 @@
         <i class="ph-bold ph-caret-left text-xl"></i>
     </a>
     <h1 class="text-lg font-bold text-gray-900">Struk Pesanan</h1>
-    <div class="w-10"></div> </div>
+    <div class="w-10"></div>
+</div>
 
 <div class="px-6 pb-40">
     <div class="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden relative">
@@ -22,7 +23,7 @@
                 <i class="ph-fill ph-check-circle text-4xl text-[#37967D]"></i>
             </div>
             <h2 class="text-[#37967D] font-bold text-xl mb-1">Pembayaran Berhasil!</h2>
-            <p class="text-xs text-gray-400 font-medium">{{ $order->created_at->translatedFormat('d F Y, H:i') }}</p>
+            <p class="text-xs text-gray-400 font-medium">{{ $order->created_at->translatedFormat('l, d F Y • H:i') }}</p>
         </div>
 
         <div class="px-6 pb-6 border-b-2 border-dashed border-gray-100">
@@ -66,7 +67,8 @@
                 @foreach($order->items as $item)
                 <div class="flex justify-between items-start">
                     <div class="flex gap-3">
-                        <span class="text-sm font-bold text-[#37967D] min-w-[24px]">{{ $item->jumlah }}x</span>
+                        <span class="text-sm font-bold text-[#37967D] bg-[#37967D]/10 w-6 h-6 rounded flex items-center justify-center">{{ $item->jumlah }}x</span>
+                        
                         <div>
                             <p class="text-sm font-bold text-gray-800 leading-tight">{{ $item->product->nama_produk }}</p>
                             <p class="text-[10px] text-gray-400 mt-0.5">@ Rp{{ number_format($item->harga_jual, 0, ',', '.') }}</p>
@@ -77,16 +79,16 @@
                 @endforeach
             </div>
 
-            <div class="border-t border-dashed border-gray-200 my-4"></div>
+            <div class="border-t-2 border-dashed border-gray-100 my-4"></div>
 
             <div class="flex justify-between items-center mb-2">
                 <span class="text-sm text-gray-500">Metode Pembayaran</span>
                 <div class="flex items-center gap-2">
                     @if($order->payment_method == 'tunai')
-                        <i class="ph-fill ph-money text-green-500"></i>
+                        <i class="ph-fill ph-money text-green-500 text-lg"></i>
                         <span class="text-sm font-bold text-gray-800 capitalize">Tunai</span>
                     @else
-                        <i class="ph-fill ph-qr-code text-blue-500"></i>
+                        <i class="ph-fill ph-qr-code text-blue-500 text-lg"></i>
                         <span class="text-sm font-bold text-gray-800 capitalize">QRIS</span>
                     @endif
                 </div>
@@ -115,7 +117,7 @@
 </div>
 
 <style>
-    /* Hide element saat print */
+    /* Sembunyikan elemen navigasi saat print */
     @media print {
         body * {
             visibility: hidden;

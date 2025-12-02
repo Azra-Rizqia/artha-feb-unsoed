@@ -16,10 +16,10 @@ class OrderController extends Controller
 
         if ($request->filled('search')) {
             $query->where('order_code', 'like', '%' . $request->search . '%')
-                  ->orWhere('nama_pemesan', 'like', '%' . $request->search . '%');
+                ->orWhere('nama_pemesan', 'like', '%' . $request->search . '%');
         }
 
-        $orders = $query->paginate(10); 
+        $orders = $query->paginate(10);
 
         return view('orders.index', compact('orders'));
     }
@@ -37,13 +37,57 @@ class OrderController extends Controller
         }
 
         $products = $query->where('stock', '>', 0)->latest()->get();
-        
+
         return view('orders.create', compact('products'));
     }
 
+    public function detail(Request $request)
+    {
+        // 1. Jika ini bukan request POST (misal: refresh/back), alihkan ke halaman create.
+        if ($request->method() !== 'POST') {
+            return redirect()->route('orders.create');
+        }
+
+        // 2. Jika ini POST, proses data
+        $cartData = json_decode($request->cart, true);
+        
+        // Jika POST tapi cart kosong, alihkan ke halaman create (bukan back() yang berbahaya)
+        if (!$cartData || count($cartData) == 0) {
+            return redirect()->route('orders.create')->with('error', 'Keranjang kosong!');
+        }
+
+        // 3. Logika pemrosesan data (sama seperti sebelumnya)
+        $details = [];
+        $totalPrice = 0;
+
+        foreach ($cartData as $item) {
+            $product = Product::find($item['id']);
+            if ($product) {
+                $subtotal = $product->harga_jual * $item['qty'];
+                $totalPrice += $subtotal;
+                
+                $details[] = [
+                    'id' => $product->id,
+                    'name' => $product->nama_produk,
+                    'qty' => $item['qty'],
+                    'price' => $product->harga_jual,
+                    'subtotal' => $subtotal,
+                    'image_url' => $product->image_url
+                ];
+            }
+        }
+
+        // Generate Order Code Preview
+        $today = date('Ymd');
+        $count = Order::whereDate('created_at', now())->count() + 1;
+        $orderCode = 'ORD-' . $today . '-' . str_pad($count, 3, '0', STR_PAD_LEFT);
+
+        return view('orders.detail', compact('details', 'totalPrice', 'orderCode'));
+    }
+
+
     public function store(Request $request)
     {
-        // 1. Validasi
         $request->validate([
             'cart' => 'required|string',
             'nama_pemesan' => 'required|string',
@@ -58,16 +102,12 @@ class OrderController extends Controller
         }
 
         try {
-            // 2. Simpan Data (Pakai variabel $order untuk menampung hasil)
             $order = DB::transaction(function () use ($request, $cartItems) {
-                
-                // Generate Kode Order
                 $today = date('Ymd');
                 $lastOrder = Order::whereDate('created_at', now())->lockForUpdate()->count();
                 $count = $lastOrder + 1;
                 $orderCode = 'ORD-' . $today . '-' . str_pad($count, 3, '0', STR_PAD_LEFT);
 
-                // Create Header
                 $order = Order::create([
                     'order_code' => $orderCode,
                     'nama_pemesan' => $request->nama_pemesan,
@@ -83,10 +123,9 @@ class OrderController extends Controller
                 $total_modal = 0;
                 $total_profit = 0;
 
-                // Create Items
                 foreach ($cartItems as $item) {
                     $product = Product::lockForUpdate()->findOrFail($item['id']);
-                    
+
                     if ($product->stock < $item['qty']) {
                         throw new \Exception("Stok {$product->nama_produk} habis!");
                     }
@@ -112,20 +151,16 @@ class OrderController extends Controller
                     $total_profit += $profit;
                 }
 
-                // Update Total
                 $order->update([
                     'total_uang_masuk' => $total_uang,
                     'total_modal' => $total_modal,
                     'total_profit' => $total_profit,
                 ]);
 
-                // PENTING: Kembalikan objek order agar bisa dipakai di bawah
                 return $order;
             });
 
-            // 3. Redirect LANGSUNG ke halaman DETAIL (Struk)
             return redirect()->route('orders.show', $order->id)->with('success', 'Pesanan berhasil dibuat!');
-
         } catch (\Exception $e) {
             return back()->with('error', 'Gagal: ' . $e->getMessage());
         }

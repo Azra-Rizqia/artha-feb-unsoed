@@ -17,10 +17,17 @@ Route::resource('menu', ProductController::class);
 
 // 3. Routes Manual untuk Orders (Pemesanan)
 // URL: http://127.0.0.1:8000/orders
-Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
+// 1. Halaman Pilih Menu
 Route::get('/orders/create', [OrderController::class, 'create'])->name('orders.create');
-// Tambahkan baris ini di bawah route orders lainnya
-Route::post('/orders/confirmation', [OrderController::class, 'confirmation'])->name('orders.confirmation');
 
-Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
+// 2. Halaman Detail Pesanan (POST karena kirim data keranjang)
+// Route::match agar mendukung GET (untuk refresh/back) dan POST
+Route::match(['get', 'post'], '/orders/detail', [OrderController::class, 'detail'])->name('orders.detail');
+
+// 3. Proses Simpan
+Route::post('/orders/store', [OrderController::class, 'store'])->name('orders.store');
+
 Route::get('/orders/{id}', [OrderController::class, 'show'])->name('orders.show');
+
+// 4. Halaman Riwayat
+Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
