@@ -26,7 +26,7 @@
 
     {{-- Bottom Nav --}}
     {{-- Tampilkan Bottom Nav KECUALI di halaman create & edit --}}
-    @if(!request()->routeIs('menu.create') && !request()->routeIs('menu.edit'))
+    @if(!request()->routeIs('menu.create') && !request()->routeIs('menu.edit') && !request()->routeIs('qna.index'))
         @includeIf('component.bottom-nav')
     @endif
 
