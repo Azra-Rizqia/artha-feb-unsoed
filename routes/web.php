@@ -3,13 +3,20 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\OrderController;
-use App\Http\Controllers\MenuController;
+// use App\Http\Controllers\MenuController; <-- Baris ini dihapus karena filenya sudah tidak ada
 
-Route::get('/menu', function () {
+// 1. Redirect halaman utama ('/') langsung ke daftar menu
+Route::get('/', function () {
     return redirect()->route('menu.index');
 });
-Route::get('/menu', ProductController::class, 'searchProducts');
-Route::resource('products', ProductController::class);
-Route::resource('orders', OrderController::class);
-Route::resource('menu', MenuController::class);
 
+// 2. Resource Controller untuk Menu (menggunakan ProductController)
+// Ini otomatis membuat semua route: index, create, store, edit, update, destroy
+// URL: http://127.0.0.1:8000/menu
+Route::resource('menu', ProductController::class);
+
+// 3. Routes Manual untuk Orders (Pemesanan)
+// URL: http://127.0.0.1:8000/orders
+Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
+Route::get('/orders/create', [OrderController::class, 'create'])->name('orders.create');
+Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');

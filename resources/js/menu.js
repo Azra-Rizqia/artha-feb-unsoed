@@ -1,8 +1,17 @@
-console.log("Menu UI Loaded");
+// public/js/menu.js
 
-// Example event
-document.querySelectorAll(".detail-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-        alert("Detail berasal dari database nanti 😎");
+document.addEventListener("DOMContentLoaded", () => {
+    console.log("Menu UI Loaded");
+
+    // Efek sederhana saat tombol kategori diklik (Opsional)
+    const catButtons = document.querySelectorAll('.category button');
+    
+    catButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            // Hapus kelas active dari semua tombol
+            catButtons.forEach(b => b.classList.remove('active'));
+            // Tambahkan ke tombol yang diklik
+            this.classList.add('active');
+        });
     });
 });

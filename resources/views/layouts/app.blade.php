@@ -6,23 +6,32 @@
 
     <title>@yield('title', 'App')</title>
 
-    {{-- Global CSS --}}
-    <link rel="stylesheet" href="{{ asset('css/menu.css') }}">
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+
     @stack('styles')
 </head>
 
-<body class="app-container">
+<body class="bg-[#F7F7F7] text-[#333333] font-sans antialiased pb-24">
 
-    @includeIf('components.navbar')
+    {{-- Navbar --}}
+    @includeIf('component.navbar')
 
-    <main class="page-content">
+    <main class="w-full max-w-[480px] mx-auto min-h-screen relative">
         @yield('content')
     </main>
 
-    @includeIf('components.bottom-nav')
+    {{-- Bottom Nav --}}
+    {{-- Tampilkan Bottom Nav KECUALI di halaman create & edit --}}
+    @if(!request()->routeIs('menu.create') && !request()->routeIs('menu.edit'))
+        @includeIf('component.bottom-nav')
+    @endif
 
-    {{-- Global JS --}}
-    <script src="{{ asset('js/menu.js') }}"></script>
+    {{-- Scripts --}}
+    @vite(['resources/js/menu.js'])
     @stack('scripts')
 
 </body>
