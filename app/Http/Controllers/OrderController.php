@@ -6,177 +6,128 @@ use Illuminate\Http\Request;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use Illuminate\Support\Facades\DB;
 
 class OrderController extends Controller
 {
-    /**
-     * Display a listing of the resource with optional filter
-     */
-    public function getAll(Request $request)
+    public function index(Request $request)
     {
-        $query = Order::with('items.product')->latest();
+        $query = Order::withCount('items')->latest();
 
-        // Filter berdasarkan query parameter
-        if ($request->has('filter')) {
-            $filter = $request->filter;
-
-            if ($filter === 'today') {
-                $query->whereDate('created_at', now()->toDateString());
-            } elseif ($filter === 'this_week') {
-                $query->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()]);
-            } elseif ($filter === 'this_month') {
-                $query->whereMonth('created_at', now()->month)
-                    ->whereYear('created_at', now()->year);
-            }
+        if ($request->filled('search')) {
+            $query->where('order_code', 'like', '%' . $request->search . '%')
+                  ->orWhere('nama_pemesan', 'like', '%' . $request->search . '%');
         }
 
-        $orders = $query->get();
+        // PERBAIKAN 1: Pakai paginate biar web ga berat kalau data banyak
+        $orders = $query->paginate(10); 
 
-        // Tambahkan formatted_id
-        $orders->transform(function ($order) {
-            $order->formatted_id = 'Pesanan ID #' . str_pad($order->id, 3, '0', STR_PAD_LEFT);
-            return $order;
-        });
-
-        return response()->json([
-            'success' => true,
-            'data' => $orders
-        ]);
+        return view('orders.index', compact('orders'));
     }
 
-    /**
-     * Generate a new order code for "Create Orders" page
-     */
-    public function getNewOrderCode()
+    public function create(Request $request)
     {
-        $totalOrders = Order::count() + 1; // +1 untuk order berikutnya
-        $formattedId = str_pad($totalOrders, 2, '0', STR_PAD_LEFT);
+        $query = Product::query();
 
-        return response()->json([
-            'success' => true,
-            'formatted_id' => 'Pesanan ID #' . $formattedId, // untuk FE
-            'order_code' => 'ORD-' . date('Ymd') . '-' . $formattedId // untuk DB saat submit
-        ]);
+        if ($request->filled('category') && $request->category !== 'Semua') {
+            $query->where('kategori', $request->category);
+        }
+
+        if ($request->filled('search')) {
+            $query->where('nama_produk', 'like', '%' . $request->search . '%');
+        }
+
+        $products = $query->where('stock', '>', 0)->latest()->get();
+
+        // PERBAIKAN 2: Hapus logic generate orderCode disini.
+        // Kita generate nanti pas SAVE aja biar ga bentrok antar kasir.
+        
+        return view('orders.create', compact('products'));
     }
 
-    /**
-     * Store a newly created order
-     */
-    public function addOrders(Request $request)
+    public function store(Request $request)
     {
         $request->validate([
+            'cart' => 'required|string',
             'nama_pemesan' => 'required|string',
             'tipe_pesanan' => 'required|in:makan_ditempat,bungkus',
             'payment_method' => 'required|in:tunai,qris',
-            'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|integer|exists:products,id',
-            'items.*.jumlah' => 'required|integer|min:1',
-            'order_code' => 'required|string', // harus dikirim dari FE
         ]);
 
-        // Pakai kode yang dikirim dari FE
-        $orderCode = $request->order_code;
+        $cartItems = json_decode($request->cart, true);
 
-        $order = Order::create([
-            'order_code' => $orderCode,
-            'nama_pemesan' => $request->nama_pemesan,
-            'tipe_pesanan' => $request->tipe_pesanan,
-            'payment_method' => $request->payment_method,
-            'total_uang_masuk' => 0,
-            'total_modal' => 0,
-            'total_profit' => 0,
-            'status' => 'selesai'
-        ]);
-
-        $total_uang = 0;
-        $total_modal = 0;
-        $total_profit = 0;
-
-        foreach ($request->items as $item) {
-            $produk = Product::findOrFail($item['product_id']);
-
-            $subtotal = $produk->harga_jual * $item['jumlah'];
-            $modal = $produk->harga_modal * $item['jumlah'];
-            $profit = ($produk->harga_jual - $produk->harga_modal) * $item['jumlah'];
-
-            OrderItem::create([
-                'order_id' => $order->id,
-                'product_id' => $produk->id,
-                'jumlah' => $item['jumlah'],
-                'harga_modal' => $produk->harga_modal,
-                'harga_jual' => $produk->harga_jual,
-                'subtotal' => $subtotal,
-                'profit' => $profit,
-            ]);
-
-            $produk->stock -= $item['jumlah'];
-            $produk->save();
-
-            $total_uang += $subtotal;
-            $total_modal += $modal;
-            $total_profit += $profit;
+        if (empty($cartItems)) {
+            return back()->with('error', 'Keranjang kosong!');
         }
 
-        $order->update([
-            'total_uang_masuk' => $total_uang,
-            'total_modal' => $total_modal,
-            'total_profit' => $total_profit,
-        ]);
+        try {
+            DB::transaction(function () use ($request, $cartItems) {
+                
+                // PERBAIKAN 3: Generate Order Code disini (inside transaction)
+                // Ini memastikan urutan nomor tidak balapan/bentrok
+                $today = date('Ymd');
+                // Lock row terakhir untuk memastikan sequence aman (opsional tapi bagus)
+                $lastOrder = Order::whereDate('created_at', now())->lockForUpdate()->count();
+                $count = $lastOrder + 1;
+                $orderCode = 'ORD-' . $today . '-' . str_pad($count, 3, '0', STR_PAD_LEFT);
 
-        // Tambahkan formatted_id di response
-        $order->formatted_id = 'Pesanan ID #' . substr($orderCode, -2); // ambil urutan dari kode
+                $order = Order::create([
+                    'order_code' => $orderCode, // Pakai kode yang baru digenerate
+                    'nama_pemesan' => $request->nama_pemesan,
+                    'tipe_pesanan' => $request->tipe_pesanan,
+                    'payment_method' => $request->payment_method,
+                    'total_uang_masuk' => 0,
+                    'total_modal' => 0,
+                    'total_profit' => 0,
+                    'status' => 'selesai'
+                ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Pesanan berhasil dibuat!',
-            'data' => $order->load('items.product')
-        ], 201);
-    }
+                $total_uang = 0;
+                $total_modal = 0;
+                $total_profit = 0;
 
-    /**
-     * Display a specific order by ID
-     */
-    public function getByIdOrders(string $id)
-    {
-        $order = Order::with('items.product')->findOrFail($id);
-        $order->formatted_id = 'Pesanan ID #' . str_pad($order->id, 3, '0', STR_PAD_LEFT);
+                foreach ($cartItems as $item) {
+                    // Lock produk biar stok ga berubah pas lagi diproses transaksi lain
+                    $product = Product::lockForUpdate()->findOrFail($item['id']);
+                    
+                    // PERBAIKAN 4: Cek Stok Cukup Gak?
+                    if ($product->stock < $item['qty']) {
+                        throw new \Exception("Stok {$product->nama_produk} tidak cukup! Sisa: {$product->stock}");
+                    }
 
-        return response()->json([
-            'success' => true,
-            'data' => $order
-        ]);
-    }
+                    $subtotal = $product->harga_jual * $item['qty'];
+                    $modal = $product->harga_modal * $item['qty'];
+                    $profit = ($product->harga_jual - $product->harga_modal) * $item['qty'];
 
+                    OrderItem::create([
+                        'order_id' => $order->id,
+                        'product_id' => $product->id,
+                        'jumlah' => $item['qty'],
+                        'harga_modal' => $product->harga_modal,
+                        'harga_jual' => $product->harga_jual,
+                        'subtotal' => $subtotal,
+                        'profit' => $profit,
+                    ]);
 
-    /**
-     * Cancel order
-     */
-    public function batalOrders(string $id)
-    {
-        $order = Order::with('items.product')->findOrFail($id);
+                    $product->decrement('stock', $item['qty']);
 
-        if ($order->status === 'batal') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Pesanan sudah dibatalkan sebelumnya!'
-            ], 400);
+                    $total_uang += $subtotal;
+                    $total_modal += $modal;
+                    $total_profit += $profit;
+                }
+
+                $order->update([
+                    'total_uang_masuk' => $total_uang,
+                    'total_modal' => $total_modal,
+                    'total_profit' => $total_profit,
+                ]);
+            });
+
+            return redirect()->route('orders.index')->with('success', 'Pesanan berhasil dibuat!');
+
+        } catch (\Exception $e) {
+            // Tangkap error stok atau error lain
+            return back()->with('error', 'Gagal memproses: ' . $e->getMessage());
         }
-
-        foreach ($order->items as $item) {
-            $produk = Product::find($item->product_id);
-            if ($produk) {
-                $produk->stock += $item->jumlah;
-                $produk->save();
-            }
-        }
-
-        $order->update([
-            'status' => 'batal'
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Pesanan berhasil dibatalkan dan stok telah dikembalikan'
-        ]);
     }
 }

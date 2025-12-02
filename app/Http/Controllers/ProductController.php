@@ -2,183 +2,138 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use App\Models\Product;
 
 class ProductController extends Controller
 {
-    public function index()
-    {
-        $products = Product::all();
-
-        return view('menu.index', compact('products'));
-    }
-    // ------------------------
-    // CREATE PRODUCT
-    // ------------------------
-     /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
-    public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'nama_produk' => 'required',
-            'deskripsi' => 'required',
-            'kategori' => 'required',
-            'stock' => 'required|integer',
-            'harga_modal' => 'required|integer',
-            'persen_keuntungan' => 'required|integer',
-            'image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048'
-        ]);
-
-        // Upload image & simpan ke image_url
-        if ($request->hasFile('image')) {
-            $validated['image_url'] = $request->file('image')->store('produk', 'public');
-        }
-
-        // hitung harga jual
-        $validated['harga_jual'] =
-            $validated['harga_modal'] +
-            ($validated['harga_modal'] * ($validated['persen_keuntungan'] / 100));
-
-        // Hapus field 'image' agar tidak masuk ke DB
-        unset($validated['image']);
-
-        $product = Product::create($validated);
-
-        // tambahkan full URL
-        $product->image_url = $product->image_url
-            ? asset('storage/' . $product->image_url)
-            : null;
-
-        return response()->json([
-            'message' => 'Produk berhasil ditambahkan',
-            'data' => $product
-        ]);
-    }
-
-    // ------------------------
-    // SHOW PRODUCT
-    // ------------------------
-    public function show(string $id)
-    {
-        $product = Product::findOrFail($id);
-
-        $product->image_url = $product->image_url
-            ? asset('storage/' . $product->image_url)
-            : null;
-
-        return response()->json([
-            'success' => true,
-            'data' => $product
-        ]);
-    }
     /**
-     * Show the form for editing the specified resource.
+     * Menampilkan daftar produk (Index)
+     * Menggabungkan fitur list semua dan pencarian.
      */
-    public function edit(string $id)
-    {
-        //
-    }
-    public function searchProducts(Request $request)
+    public function index(Request $request)
     {
         $query = Product::query();
 
-        if ($request->filled('q')) {
-            $keyword = $request->q;
+        // Logika Pencarian (Jika ada parameter 'search' atau 'q' dari form)
+        if ($request->filled('search')) {
+            $keyword = $request->search;
             $query->where('nama_produk', 'like', "%{$keyword}%")
-                ->orWhere('kategori', 'like', "%{$keyword}%");
+                  ->orWhere('kategori', 'like', "%{$keyword}%");
         }
 
-        $products = $query->get();
+        // Ambil data terbaru
+        $products = $query->latest()->get();
 
-        foreach ($products as $product) {
-            $product->image_url = $product->image_url
-                ? asset('storage/' . $product->image_url)
-                : null;
-        }
-
-        return response()->json([
-            'success' => true,
-            'data' => $products
-        ]);
+        // Tampilkan View (Bukan JSON)
+        return view('menu.index', compact('products'));
     }
 
+    /**
+     * Menampilkan Form Tambah Produk
+     */
+    public function create()
+    {
+        return view('menu.create');
+    }
 
-    // ------------------------
-    // UPDATE PRODUCT
-    // ------------------------
-    public function updateProduct(Request $request, string $id)
+    /**
+     * Menyimpan Produk Baru ke Database
+     */
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'nama_produk' => 'required|string|max:255',
+            'deskripsi'   => 'required|string',
+            'kategori'    => 'required|string',
+            'stock'       => 'required|integer|min:0',
+            'harga_modal' => 'required|numeric|min:0',
+            'persen_keuntungan' => 'required|numeric|min:0',
+            'image'       => 'nullable|image|mimes:jpg,jpeg,png|max:2048'
+        ]);
+
+        // Hitung harga jual otomatis
+        $validated['harga_jual'] = $validated['harga_modal'] + 
+            ($validated['harga_modal'] * ($validated['persen_keuntungan'] / 100));
+
+        // Upload Gambar jika ada
+        if ($request->hasFile('image')) {
+            $validated['image_url'] = $request->file('image')->store('products', 'public');
+        }
+
+        // Hapus field 'image' dari array karena kolom di DB bernama 'image_url'
+        unset($validated['image']);
+
+        Product::create($validated);
+
+        // Redirect kembali ke halaman menu
+        return back()->with('product_added', true);
+    }
+
+    /**
+     * Menampilkan Form Edit Produk
+     */
+    public function edit(string $id)
+    {
+        $product = Product::findOrFail($id);
+        return view('menu.edit', compact('product'));
+    }
+
+    /**
+     * Memperbarui Produk (Update)
+     */
+    public function update(Request $request, string $id)
     {
         $product = Product::findOrFail($id);
 
         $validated = $request->validate([
-            'nama_produk' => 'sometimes|required|string',
-            'deskripsi' => 'sometimes|required|string',
-            'kategori' => 'sometimes|required|string',
-            'harga_modal' => 'sometimes|required|numeric',
-            'persen_keuntungan' => 'sometimes|required|numeric',
-            'stock' => 'sometimes|required|numeric',
-            'image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048'
+            'nama_produk' => 'required|string|max:255',
+            'deskripsi'   => 'required|string',
+            'kategori'    => 'required|string',
+            'stock'       => 'required|integer|min:0',
+            'harga_modal' => 'required|numeric|min:0',
+            'persen_keuntungan' => 'required|numeric|min:0',
+            'image'       => 'nullable|image|mimes:jpg,jpeg,png|max:2048'
         ]);
 
-        // update image
-        if ($request->hasFile('image')) {
+        // Hitung ulang harga jual
+        $validated['harga_jual'] = $validated['harga_modal'] + 
+            ($validated['harga_modal'] * ($validated['persen_keuntungan'] / 100));
 
-            // hapus lama
+        // Cek jika ada upload gambar baru
+        if ($request->hasFile('image')) {
+            // Hapus gambar lama dari storage jika ada
             if ($product->image_url) {
                 Storage::disk('public')->delete($product->image_url);
             }
-
-            // simpan baru
-            $validated['image_url'] = $request->file('image')->store('produk', 'public');
-        }
-
-        // hitung harga jual jika modal/profit berubah
-        if ($request->filled('harga_modal') || $request->filled('persen_keuntungan')) {
-            $modal = $request->harga_modal ?? $product->harga_modal;
-            $profit = $request->persen_keuntungan ?? $product->persen_keuntungan;
-
-            $validated['harga_jual'] = $modal + ($modal * $profit / 100);
+            // Simpan gambar baru
+            $validated['image_url'] = $request->file('image')->store('products', 'public');
         }
 
         unset($validated['image']);
 
         $product->update($validated);
 
-        // full url
-        $product->image_url = $product->image_url
-            ? asset('storage/' . $product->image_url)
-            : null;
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Produk diperbarui',
-            'data' => $product
-        ]);
+        return redirect()->route('menu.index')
+            ->with('success', 'Produk berhasil diperbarui!');
     }
 
-    // ------------------------
-    // DELETE
-    // ------------------------
-    public function deleteProduct(string $id)
+    /**
+     * Menghapus Produk (Destroy)
+     */
+    public function destroy(string $id)
     {
         $product = Product::findOrFail($id);
 
+        // Hapus gambar dari storage
         if ($product->image_url) {
             Storage::disk('public')->delete($product->image_url);
         }
 
         $product->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Produk berhasil dihapus'
-        ]);
+        return redirect()->route('menu.index')
+            ->with('success', 'Produk berhasil dihapus!');
     }
 }
