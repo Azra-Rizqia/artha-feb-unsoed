@@ -67,10 +67,8 @@
 <div class="px-6 pt-4 pb-48">
     <div class="grid grid-cols-2 gap-4">
         @forelse($products as $product)
-        <div class="bg-white p-3.5 rounded-2xl shadow-[0_2px_15px_rgba(0,0,0,0.03)] border border-gray-50 flex flex-col h-full group transition-all hover:border-[#37967D]/30"
-             data-id="{{ $product->id }}" 
-             data-name="{{ $product->nama_produk }}"
-             data-price="{{ $product->harga_jual }}">
+        <div class="bg-white p-3.5 rounded-2xl shadow-[0_2px_15px_rgba(0,0,0,0.03)] border border-gray-50 flex flex-col h-full group transition-all hover:border-[#37967D]/30 product-card"
+             data-id="{{ $product->id }}">
             
             <div class="relative w-full aspect-square mb-3 overflow-hidden rounded-xl bg-gray-50">
                 @if($product->image_url)
@@ -89,11 +87,11 @@
             <div class="flex items-center justify-between mt-auto pt-2 border-t border-dashed border-gray-100">
                 <span class="font-bold text-sm text-gray-900">Rp{{ number_format($product->harga_jual, 0, ',', '.') }}</span>
                 <div class="flex items-center gap-2">
-                    <button class="btn-minus hidden w-8 h-8 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 active:bg-gray-100 hover:border-[#37967D] hover:text-[#37967D] transition-all">
+                    <button type="button" class="btn-minus hidden w-8 h-8 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 active:bg-gray-100 hover:border-[#37967D] hover:text-[#37967D] transition-all">
                         <i class="ph-bold ph-minus text-xs"></i>
                     </button>
                     <span class="qty-display hidden text-sm font-bold text-gray-800 w-5 text-center">0</span>
-                    <button class="btn-plus w-8 h-8 rounded-xl bg-[#37967D] text-white flex items-center justify-center shadow-lg shadow-[#37967D]/20 active:scale-90 hover:bg-[#2f826c] transition-all">
+                    <button type="button" class="btn-plus w-8 h-8 rounded-xl bg-[#37967D] text-white flex items-center justify-center shadow-lg shadow-[#37967D]/20 active:scale-90 hover:bg-[#2f826c] transition-all">
                         <i class="ph-bold ph-plus text-xs"></i>
                     </button>
                 </div>
@@ -110,8 +108,8 @@
     </div>
 </div>
 
-<div id="checkoutBar" class="fixed bottom-[90px] left-0 w-full px-6 z-40 max-w-[480px] mx-auto left-0 right-0 transform translate-y-[200%] transition-transform duration-500 cubic-bezier(0.34, 1.56, 0.64, 1)">
-    <button onclick="openCheckoutModal()" class="w-full bg-[#37967D] text-white font-bold py-4 rounded-2xl shadow-2xl shadow-[#37967D]/40 flex justify-between items-center px-6 active:scale-98 transition-transform hover:bg-[#2f826c] border border-white/10 backdrop-blur-sm">
+<div id="checkoutBar" class="invisible fixed bottom-24 left-0 w-full px-6 z-40 max-w-[480px] mx-auto left-0 right-0 transform translate-y-10 transition-all duration-300">
+    <button type="button" onclick="openCheckoutModal()" class="w-full bg-[#37967D] text-white font-bold py-4 rounded-2xl shadow-2xl shadow-[#37967D]/40 flex justify-between items-center px-6 active:scale-98 transition-transform hover:bg-[#2f826c] border border-white/10 backdrop-blur-sm">
         <div class="flex flex-col items-start">
             <span class="text-[10px] uppercase tracking-wider opacity-80 font-medium">Total Pesanan</span>
             <span id="barTotalPrice" class="text-lg font-bold">Rp0</span>
@@ -135,7 +133,7 @@
                 <h3 class="text-xl font-bold text-gray-900">Konfirmasi Pesanan</h3>
                 <p class="text-xs text-gray-400 mt-1">Periksa kembali pesanan pelanggan</p>
             </div>
-            <button onclick="closeCheckoutModal()" class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors">
+            <button type="button" onclick="closeCheckoutModal()" class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors">
                 <i class="ph-bold ph-x"></i>
             </button>
         </div>
@@ -209,22 +207,25 @@
     </div>
 </div>
 
+<div id="product-data" data-products="{{ json_encode($products->keyBy('id')) }}" class="hidden"></div>
+
 <script>
+    // FIX: Ambil data dari atribut HTML, bukan dari sintaks Blade langsung di script
+    const productDataElement = document.getElementById('product-data');
+    const dbProducts = JSON.parse(productDataElement.getAttribute('data-products'));
+    
     let cart = {}; 
 
     document.addEventListener("DOMContentLoaded", () => {
-        const productCards = document.querySelectorAll('[data-id]');
+        const productCards = document.querySelectorAll('.product-card');
         const checkoutBar = document.getElementById('checkoutBar');
         const totalItemsSpan = document.getElementById('totalItems');
         const barTotalPriceSpan = document.getElementById('barTotalPrice');
 
         productCards.forEach(card => {
             const id = card.dataset.id;
-            const price = parseInt(card.dataset.price);
-            
             const btnPlus = card.querySelector('.btn-plus');
             const btnMinus = card.querySelector('.btn-minus');
-            const qtyDisplay = card.querySelector('.qty-display');
 
             btnPlus.addEventListener('click', () => {
                 cart[id] = (cart[id] || 0) + 1;
@@ -262,21 +263,23 @@
         function updateFloatingBar() {
             let totalQty = 0;
             let totalPrice = 0;
+
             for (const [id, qty] of Object.entries(cart)) {
-                totalQty += qty;
-                const card = document.querySelector(`[data-id="${id}"]`);
-                const price = parseInt(card.dataset.price);
-                totalPrice += price * qty;
+                if(dbProducts[id]) {
+                    totalQty += qty;
+                    totalPrice += dbProducts[id].harga_jual * qty;
+                }
             }
+
             totalItemsSpan.innerText = totalQty;
             const formattedPrice = 'Rp' + totalPrice.toLocaleString('id-ID');
             barTotalPriceSpan.innerText = formattedPrice;
             document.getElementById('modalTotalPrice').innerText = formattedPrice;
 
             if (totalQty > 0) {
-                checkoutBar.classList.remove('translate-y-[200%]');
+                checkoutBar.classList.remove('invisible', 'translate-y-10');
             } else {
-                checkoutBar.classList.add('translate-y-[200%]');
+                checkoutBar.classList.add('invisible', 'translate-y-10');
             }
         }
     });
@@ -287,22 +290,22 @@
         summaryList.innerHTML = ''; 
 
         for (const [id, qty] of Object.entries(cart)) {
-            cartData.push({ id: id, qty: qty });
-            const card = document.querySelector(`[data-id="${id}"]`);
-            const name = card.dataset.name;
-            const price = parseInt(card.dataset.price);
-            const subtotal = price * qty;
+            const product = dbProducts[id];
+            if (product) {
+                cartData.push({ id: id, qty: qty });
+                const subtotal = product.harga_jual * qty;
 
-            const html = `
-                <div class="flex justify-between items-center text-sm border-b border-gray-100 pb-2 last:border-0">
-                    <div>
-                        <span class="font-medium text-gray-700">${name}</span>
-                        <div class="text-xs text-gray-400 mt-0.5">${qty} x Rp${price.toLocaleString('id-ID')}</div>
+                const html = `
+                    <div class="flex justify-between items-center text-sm border-b border-gray-100 pb-2 last:border-0">
+                        <div>
+                            <span class="font-medium text-gray-700">${product.nama_produk}</span>
+                            <div class="text-xs text-gray-400 mt-0.5">${qty} x Rp${product.harga_jual.toLocaleString('id-ID')}</div>
+                        </div>
+                        <span class="font-bold text-gray-900">Rp${subtotal.toLocaleString('id-ID')}</span>
                     </div>
-                    <span class="font-bold text-gray-900">Rp${subtotal.toLocaleString('id-ID')}</span>
-                </div>
-            `;
-            summaryList.innerHTML += html;
+                `;
+                summaryList.innerHTML += html;
+            }
         }
         document.getElementById('cartInput').value = JSON.stringify(cartData);
         document.getElementById('checkoutModal').classList.remove('hidden');
