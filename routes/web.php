@@ -26,4 +26,8 @@ Route::resource('menu', ProductController::class);
 // URL: http://127.0.0.1:8000/orders
 Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
 Route::get('/orders/create', [OrderController::class, 'create'])->name('orders.create');
+// Tambahkan baris ini di bawah route orders lainnya
+Route::post('/orders/confirmation', [OrderController::class, 'confirmation'])->name('orders.confirmation');
+
 Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
+Route::get('/orders/{id}', [OrderController::class, 'show'])->name('orders.show');

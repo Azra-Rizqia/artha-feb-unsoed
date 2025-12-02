@@ -19,7 +19,6 @@ class OrderController extends Controller
                   ->orWhere('nama_pemesan', 'like', '%' . $request->search . '%');
         }
 
-        // PERBAIKAN 1: Pakai paginate biar web ga berat kalau data banyak
         $orders = $query->paginate(10); 
 
         return view('orders.index', compact('orders'));
@@ -38,15 +37,13 @@ class OrderController extends Controller
         }
 
         $products = $query->where('stock', '>', 0)->latest()->get();
-
-        // PERBAIKAN 2: Hapus logic generate orderCode disini.
-        // Kita generate nanti pas SAVE aja biar ga bentrok antar kasir.
         
         return view('orders.create', compact('products'));
     }
 
     public function store(Request $request)
     {
+        // 1. Validasi
         $request->validate([
             'cart' => 'required|string',
             'nama_pemesan' => 'required|string',
@@ -61,18 +58,18 @@ class OrderController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($request, $cartItems) {
+            // 2. Simpan Data (Pakai variabel $order untuk menampung hasil)
+            $order = DB::transaction(function () use ($request, $cartItems) {
                 
-                // PERBAIKAN 3: Generate Order Code disini (inside transaction)
-                // Ini memastikan urutan nomor tidak balapan/bentrok
+                // Generate Kode Order
                 $today = date('Ymd');
-                // Lock row terakhir untuk memastikan sequence aman (opsional tapi bagus)
                 $lastOrder = Order::whereDate('created_at', now())->lockForUpdate()->count();
                 $count = $lastOrder + 1;
                 $orderCode = 'ORD-' . $today . '-' . str_pad($count, 3, '0', STR_PAD_LEFT);
 
+                // Create Header
                 $order = Order::create([
-                    'order_code' => $orderCode, // Pakai kode yang baru digenerate
+                    'order_code' => $orderCode,
                     'nama_pemesan' => $request->nama_pemesan,
                     'tipe_pesanan' => $request->tipe_pesanan,
                     'payment_method' => $request->payment_method,
@@ -86,13 +83,12 @@ class OrderController extends Controller
                 $total_modal = 0;
                 $total_profit = 0;
 
+                // Create Items
                 foreach ($cartItems as $item) {
-                    // Lock produk biar stok ga berubah pas lagi diproses transaksi lain
                     $product = Product::lockForUpdate()->findOrFail($item['id']);
                     
-                    // PERBAIKAN 4: Cek Stok Cukup Gak?
                     if ($product->stock < $item['qty']) {
-                        throw new \Exception("Stok {$product->nama_produk} tidak cukup! Sisa: {$product->stock}");
+                        throw new \Exception("Stok {$product->nama_produk} habis!");
                     }
 
                     $subtotal = $product->harga_jual * $item['qty'];
@@ -116,18 +112,28 @@ class OrderController extends Controller
                     $total_profit += $profit;
                 }
 
+                // Update Total
                 $order->update([
                     'total_uang_masuk' => $total_uang,
                     'total_modal' => $total_modal,
                     'total_profit' => $total_profit,
                 ]);
+
+                // PENTING: Kembalikan objek order agar bisa dipakai di bawah
+                return $order;
             });
 
-            return redirect()->route('orders.index')->with('success', 'Pesanan berhasil dibuat!');
+            // 3. Redirect LANGSUNG ke halaman DETAIL (Struk)
+            return redirect()->route('orders.show', $order->id)->with('success', 'Pesanan berhasil dibuat!');
 
         } catch (\Exception $e) {
-            // Tangkap error stok atau error lain
-            return back()->with('error', 'Gagal memproses: ' . $e->getMessage());
+            return back()->with('error', 'Gagal: ' . $e->getMessage());
         }
+    }
+
+    public function show($id)
+    {
+        $order = Order::with('items.product')->findOrFail($id);
+        return view('orders.show', compact('order'));
     }
 }
